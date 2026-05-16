@@ -14,3 +14,14 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## Backend
+
+This project now includes a MongoDB-backed backend in [backend](backend).
+
+1. Copy [backend/.env.example](backend/.env.example) to `backend/.env` and set `MONGODB_URI` and `JWT_SECRET`.
+2. Install backend dependencies inside `backend` with `npm install`.
+3. Start the API from `backend` with `npm run dev`, or from the repo root with `npm run api`.
+4. Start the frontend from the repo root with `npm run dev`.
+
+After login, the app redirects to a personalized dashboard at `/dashboard` that shows the logged-in user's name, startup, sector, and location.

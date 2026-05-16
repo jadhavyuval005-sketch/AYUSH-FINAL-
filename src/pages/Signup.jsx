@@ -1,6 +1,7 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { registerUser, requestOtp } from "../lib/api";
+import useLanguage from "../hooks/useLanguage";
 import "./Signup.css";
 
 const INDIAN_STATES = [
@@ -47,17 +48,12 @@ const INDIAN_UTS = [
 
 function Signup() {
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
-  const [isHindi, setIsHindi] = useState(() => {
-    try {
-      return localStorage.getItem("lang") === "hi";
-    } catch {
-      return false;
-    }
-  });
+  const { isHindi, toggleLanguage } = useLanguage();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [infoMessage, setInfoMessage] = useState("");
   const [errorField, setErrorField] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [mobile, setMobile] = useState("+91 ");
   const [emailOtp, setEmailOtp] = useState("");
   const [mobileOtp, setMobileOtp] = useState("");
@@ -81,6 +77,76 @@ function Signup() {
   const ayushDropdownRef = useRef(null);
   const stateUtRef = useRef(null);
   const declarationRef = useRef(null);
+
+  const msg = (en, hi) => (isHindi ? hi : en);
+
+  const copy = isHindi
+    ? {
+        subtitle: "लॉगिन क्रेडेंशियल बनाने के लिए आवश्यक विवरण भरें।",
+        section1: "खंड 1 - मूल खाता जानकारी (अनिवार्य)",
+        fullName: "पूरा नाम (संस्थापक / अधिकृत व्यक्ति)",
+        officialEmail: "आधिकारिक ईमेल पता",
+        emailOtp: "ईमेल ओटीपी",
+        mobileNumber: "मोबाइल नंबर",
+        mobileOtp: "मोबाइल ओटीपी",
+        password: "पासवर्ड",
+        confirmPassword: "पासवर्ड की पुष्टि करें",
+        section1Hint1: "कम से कम 8 अक्षर, जिनमें 1 बड़ा अक्षर, 1 छोटा अक्षर, 1 संख्या और 1 विशेष चिन्ह शामिल हो।",
+        section1Hint2: "लगातार 3 अक्षर (abc), 3 अंक (123) या समान अक्षर (aaa) नहीं होने चाहिए।",
+        section2: "खंड 2 - स्टार्टअप पहचान",
+        startupName: "स्टार्टअप का नाम",
+        ayushSector: "आयुष क्षेत्र",
+        selectSector: "क्षेत्र चुनें",
+        stateUt: "राज्य / केंद्र शासित प्रदेश",
+        selectStateUt: "राज्य / केंद्र शासित प्रदेश चुनें",
+        startupHint1: "3-100 अक्षर, केवल अक्षर, अंक, स्पेस, डॉट (.), एम्परसैंड (&), और हाइफ़न (-)।",
+        startupHint2: "केवल अंक नहीं, विशेष चिन्ह से शुरुआत नहीं, और 3 लगातार विशेष चिन्ह नहीं।",
+        startupHint3: "शुरुआत और अंत के अतिरिक्त स्पेस स्वतः हटाए जाएंगे।",
+        documentNote: "यहाँ दस्तावेज़ अपलोड न करें। दस्तावेज़ संग्रहण पंजीकरण चरण का भाग है।",
+        statesLabel: "राज्य",
+        utsLabel: "केंद्र शासित प्रदेश",
+        passwordMismatch: "पासवर्ड और पुष्टि पासवर्ड समान होने चाहिए।",
+        section3: "खंड 3 - घोषणा",
+        declaration:
+          "मैं पुष्टि करता/करती हूँ कि प्रदान की गई जानकारी सही एवं प्रामाणिक है। मैं पंजीकरण एवं सत्यापन उद्देश्यों के लिए भारत सरकार तथा संबंधित प्राधिकरणों के साथ प्रदान किए गए डेटा को साझा करने के लिए सहमत हूँ। मैंने नियम एवं शर्तें तथा गोपनीयता नीति को पढ़ लिया है और स्वीकार करता/करती हूँ।",
+        createAccount: "अकाउंट बनाएं",
+        alreadyRegistered: "पहले से पंजीकृत? लॉगिन",
+        sendOtp: "ओटीपी भेजें",
+        creating: "अकाउंट बनाया जा रहा है...",
+      }
+    : {
+        subtitle: "Complete the required details to create your login credentials.",
+        section1: "Section 1 - Basic Account Information (Required)",
+        fullName: "Full Name (Founder / Authorized Person)",
+        officialEmail: "Official Email Address",
+        emailOtp: "Email OTP",
+        mobileNumber: "Mobile Number",
+        mobileOtp: "Mobile OTP",
+        password: "Password",
+        confirmPassword: "Confirm Password",
+        section1Hint1: "Minimum 8 characters, including 1 uppercase, 1 lowercase, 1 number, and 1 special character.",
+        section1Hint2: "No 3 consecutive letters (abc), numbers (123), or identical characters (aaa).",
+        section2: "Section 2 - Startup Identity",
+        startupName: "Startup Name",
+        ayushSector: "AYUSH Sector",
+        selectSector: "Select sector(s)",
+        stateUt: "State / UT",
+        selectStateUt: "Select State / UT",
+        startupHint1: "3-100 characters, using only letters, numbers, spaces, dot (.), ampersand (&), and hyphen (-).",
+        startupHint2: "Must not be only numbers, start with a special character, or contain 3 consecutive special characters.",
+        startupHint3: "Leading/trailing spaces will be trimmed automatically.",
+        documentNote: "Do not upload documents here. Document collection is part of the registration stage.",
+        statesLabel: "States",
+        utsLabel: "Union Territories",
+        passwordMismatch: "Password and Confirm Password must match.",
+        section3: "Section 3 - Declaration",
+        declaration:
+          "I confirm that the information provided is accurate and authentic. I agree to share the provided data with the Government of India and relevant authorities for registration and verification purposes. I have read and accept the Terms & Conditions and Privacy Policy.",
+        createAccount: "Create Account",
+        alreadyRegistered: "Already Registered? Login",
+        sendOtp: "Send OTP",
+        creating: "Creating Account...",
+      };
 
   const hasIncreasingLetterTriplet = (value) => {
     const normalized = value.toLowerCase();
@@ -122,27 +188,27 @@ function Signup() {
 
   const validatePassword = (password) => {
     const rules = getPasswordRuleStatus(password);
-    if (!rules.minLength) return "Password must be at least 8 characters.";
-    if (!rules.uppercase) return "Password must include at least 1 uppercase letter.";
-    if (!rules.lowercase) return "Password must include at least 1 lowercase letter.";
-    if (!rules.number) return "Password must include at least 1 number.";
-    if (!rules.special) return "Password must include at least 1 special character.";
-    if (!rules.noIncreasingLetters) return "Password must not contain 3 consecutive increasing letters (abc, xyz).";
-    if (!rules.noIncreasingNumbers) return "Password must not contain 3 consecutive increasing numbers (123, 456).";
-    if (!rules.noTripleSame) return "Password must not contain 3 identical characters in a row (aaa, 111).";
+    if (!rules.minLength) return msg("Password must be at least 8 characters.", "पासवर्ड कम से कम 8 अक्षरों का होना चाहिए।");
+    if (!rules.uppercase) return msg("Password must include at least 1 uppercase letter.", "पासवर्ड में कम से कम 1 बड़ा अक्षर होना चाहिए।");
+    if (!rules.lowercase) return msg("Password must include at least 1 lowercase letter.", "पासवर्ड में कम से कम 1 छोटा अक्षर होना चाहिए।");
+    if (!rules.number) return msg("Password must include at least 1 number.", "पासवर्ड में कम से कम 1 संख्या होना चाहिए।");
+    if (!rules.special) return msg("Password must include at least 1 special character.", "पासवर्ड में कम से कम 1 विशेष चिन्ह होना चाहिए।");
+    if (!rules.noIncreasingLetters) return msg("Password must not contain 3 consecutive increasing letters (abc, xyz).", "पासवर्ड में लगातार बढ़ते हुए 3 अक्षर (abc, xyz) नहीं होने चाहिए।");
+    if (!rules.noIncreasingNumbers) return msg("Password must not contain 3 consecutive increasing numbers (123, 456).", "पासवर्ड में लगातार बढ़ते हुए 3 अंक (123, 456) नहीं होने चाहिए।");
+    if (!rules.noTripleSame) return msg("Password must not contain 3 identical characters in a row (aaa, 111).", "पासवर्ड में लगातार 3 समान अक्षर या अंक (aaa, 111) नहीं होने चाहिए।");
     return "";
   };
 
   const validateStartupName = (value) => {
     const trimmed = value.trim();
-    if (trimmed.length < 3) return "Startup Name must be at least 3 characters.";
-    if (trimmed.length > 100) return "Startup Name must be 100 characters or fewer.";
+    if (trimmed.length < 3) return msg("Startup Name must be at least 3 characters.", "स्टार्टअप नाम कम से कम 3 अक्षरों का होना चाहिए।");
+    if (trimmed.length > 100) return msg("Startup Name must be 100 characters or fewer.", "स्टार्टअप नाम 100 अक्षरों से अधिक नहीं होना चाहिए।");
     if (!/^[A-Za-z0-9 .&-]+$/.test(trimmed)) {
-      return "Startup Name can only include letters, numbers, spaces, dot (.), ampersand (&), and hyphen (-).";
+      return msg("Startup Name can only include letters, numbers, spaces, dot (.), ampersand (&), and hyphen (-).", "स्टार्टअप नाम में केवल अक्षर, अंक, स्पेस, डॉट (.), एम्परसैंड (&), और हाइफ़न (-) हो सकते हैं।");
     }
-    if (/^[0-9]+$/.test(trimmed)) return "Startup Name must not contain only numbers.";
-    if (!/^[A-Za-z0-9]/.test(trimmed)) return "Startup Name cannot start with a special character.";
-    if (/[.&-]{3,}/.test(trimmed)) return "Startup Name cannot contain 3 consecutive special characters.";
+    if (/^[0-9]+$/.test(trimmed)) return msg("Startup Name must not contain only numbers.", "स्टार्टअप नाम केवल अंकों का नहीं होना चाहिए।");
+    if (!/^[A-Za-z0-9]/.test(trimmed)) return msg("Startup Name cannot start with a special character.", "स्टार्टअप नाम विशेष चिन्ह से शुरू नहीं होना चाहिए।");
+    if (/[.&-]{3,}/.test(trimmed)) return msg("Startup Name cannot contain 3 consecutive special characters.", "स्टार्टअप नाम में लगातार 3 विशेष चिन्ह नहीं होने चाहिए।");
     return "";
   };
 
@@ -185,10 +251,35 @@ function Signup() {
     }
   };
 
-  const handleSubmit = (event) => {
+  const sendOtp = async (channel) => {
+    setError("");
+    setSuccess("");
+    setInfoMessage("");
+
+    const value = channel === "email" ? emailRef.current?.value?.trim() : mobileRef.current?.value?.trim();
+
+    if (!value) {
+      setError(channel === "email" ? msg("Official Email Address is required before sending OTP.", "ओटीपी भेजने से पहले आधिकारिक ईमेल पता आवश्यक है।") : msg("Mobile Number is required before sending OTP.", "ओटीपी भेजने से पहले मोबाइल नंबर आवश्यक है।"));
+      return;
+    }
+
+    try {
+      const response = await requestOtp({
+        channel,
+        value,
+        purpose: "signup",
+      });
+      setInfoMessage(response.otp ? `${response.message} OTP: ${response.otp}` : response.message || msg("OTP sent successfully.", "ओटीपी सफलतापूर्वक भेजा गया।"));
+    } catch (apiError) {
+      setError(apiError.message || msg("Unable to send OTP.", "ओटीपी भेजा नहीं जा सका।"));
+    }
+  };
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setSuccess("");
+    setInfoMessage("");
     setErrorField("");
 
     const mobileValue = mobile.trim();
@@ -198,21 +289,21 @@ function Signup() {
 
     const form = event.currentTarget;
     if (!form.checkValidity()) {
-      if (!fullNameRef.current?.value?.trim()) return setErrorAndFocus("Full Name is required.", fullNameRef, "fullName");
-      if (!emailRef.current?.value?.trim()) return setErrorAndFocus("Official Email Address is required.", emailRef, "email");
-      if (!mobileValue) return setErrorAndFocus("Mobile Number is required.", mobileRef, "mobile");
-      if (!emailOtp.trim()) return setErrorAndFocus("Email OTP is required.", emailOtpRef, "emailOtp");
-      if (!mobileOtp.trim()) return setErrorAndFocus("Mobile OTP is required.", mobileOtpRef, "mobileOtp");
-      if (!passwordValue) return setErrorAndFocus("Password is required.", passwordRef, "password");
-      if (!confirmPasswordValue) return setErrorAndFocus("Confirm Password is required.", confirmPasswordRef, "confirmPassword");
-      if (!startupNameValue) return setErrorAndFocus("Startup Name is required.", startupNameRef, "startupName");
-      if (!ayushSector.length) return setErrorAndFocus("AYUSH Sector is required.", ayushSectorRef, "ayushSector");
-      if (!stateUt) return setErrorAndFocus("State / UT is required.", stateUtRef, "stateUt");
-      if (!declarationAccepted) return setErrorAndFocus("Please accept the declaration to continue.", declarationRef, "declaration");
+      if (!fullNameRef.current?.value?.trim()) return setErrorAndFocus(msg("Full Name is required.", "पूरा नाम आवश्यक है।"), fullNameRef, "fullName");
+      if (!emailRef.current?.value?.trim()) return setErrorAndFocus(msg("Official Email Address is required.", "आधिकारिक ईमेल पता आवश्यक है।"), emailRef, "email");
+      if (!mobileValue) return setErrorAndFocus(msg("Mobile Number is required.", "मोबाइल नंबर आवश्यक है।"), mobileRef, "mobile");
+      if (!emailOtp.trim()) return setErrorAndFocus(msg("Email OTP is required.", "ईमेल ओटीपी आवश्यक है।"), emailOtpRef, "emailOtp");
+      if (!mobileOtp.trim()) return setErrorAndFocus(msg("Mobile OTP is required.", "मोबाइल ओटीपी आवश्यक है।"), mobileOtpRef, "mobileOtp");
+      if (!passwordValue) return setErrorAndFocus(msg("Password is required.", "पासवर्ड आवश्यक है।"), passwordRef, "password");
+      if (!confirmPasswordValue) return setErrorAndFocus(msg("Confirm Password is required.", "पासवर्ड की पुष्टि आवश्यक है।"), confirmPasswordRef, "confirmPassword");
+      if (!startupNameValue) return setErrorAndFocus(msg("Startup Name is required.", "स्टार्टअप नाम आवश्यक है।"), startupNameRef, "startupName");
+      if (!ayushSector.length) return setErrorAndFocus(msg("AYUSH Sector is required.", "आयुष क्षेत्र आवश्यक है।"), ayushSectorRef, "ayushSector");
+      if (!stateUt) return setErrorAndFocus(msg("State / UT is required.", "राज्य / केंद्र शासित प्रदेश आवश्यक है।"), stateUtRef, "stateUt");
+      if (!declarationAccepted) return setErrorAndFocus(msg("Please accept the declaration to continue.", "जारी रखने के लिए कृपया घोषणा स्वीकार करें।"), declarationRef, "declaration");
     }
 
     if (!mobileValue.startsWith("+91")) {
-      setErrorAndFocus("Mobile number must start with +91.", mobileRef, "mobile");
+      setErrorAndFocus(msg("Mobile number must start with +91.", "मोबाइल नंबर +91 से शुरू होना चाहिए।"), mobileRef, "mobile");
       return;
     }
 
@@ -224,7 +315,7 @@ function Signup() {
 
     const allLocations = new Set([...INDIAN_STATES, ...INDIAN_UTS]);
     if (!allLocations.has(stateUt)) {
-      setErrorAndFocus("Please select a valid State / UT.", stateUtRef, "stateUt");
+      setErrorAndFocus(msg("Please select a valid State / UT.", "कृपया वैध राज्य / केंद्र शासित प्रदेश चुनें।"), stateUtRef, "stateUt");
       return;
     }
     const passwordError = validatePassword(String(passwordValue || ""));
@@ -234,24 +325,45 @@ function Signup() {
     }
 
     if (passwordValue !== confirmPasswordValue) {
-      setErrorAndFocus("Password and Confirm Password must match.", confirmPasswordRef, "confirmPassword");
+      setErrorAndFocus(msg("Password and Confirm Password must match.", "पासवर्ड और पुष्टि पासवर्ड समान होने चाहिए।"), confirmPasswordRef, "confirmPassword");
       return;
     }
 
-    setSuccess("Account created successfully. Redirecting to login...");
-    setTimeout(() => {
-      navigate("/login");
-    }, 900);
-  };
-
-  useEffect(() => {
-    i18n.changeLanguage(isHindi ? "hi" : "en");
     try {
-      localStorage.setItem("lang", isHindi ? "hi" : "en");
-    } catch {
-      // Ignore storage failures to prevent UI crash.
+      setIsSubmitting(true);
+      const formData = new FormData(event.currentTarget);
+
+      const response = await registerUser({
+        fullName: String(formData.get("fullName") || "").trim(),
+        email: String(formData.get("email") || "").trim(),
+        mobile: mobileValue,
+        emailOtp: String(emailOtp || "").trim(),
+        mobileOtp: String(mobileOtp || "").trim(),
+        password: passwordValue,
+        confirmPassword: confirmPasswordValue,
+        startupName: startupNameValue,
+        ayushSector,
+        stateUt,
+        declarationAccepted,
+      });
+
+      try {
+        localStorage.setItem("authToken", response.token);
+        localStorage.setItem("authUser", JSON.stringify(response.user));
+      } catch {
+        // Ignore storage failures so signup still succeeds.
+      }
+
+      setSuccess("Account created successfully. Redirecting to login...");
+      setTimeout(() => {
+        navigate("/login");
+      }, 900);
+    } catch (apiError) {
+      setError(apiError.message || msg("Unable to create account.", "अकाउंट बनाया नहीं जा सका।"));
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [i18n, isHindi]);
+  };
 
   useEffect(() => {
     if (!ayushDropdownOpen) return;
@@ -287,7 +399,7 @@ function Signup() {
           <div className="portal-controls">
             <button
               className="portal-lang-switch-btn"
-              onClick={() => setIsHindi(!isHindi)}
+              onClick={toggleLanguage}
               aria-label="Language toggle"
             >
               <span className={`portal-lang-pill ${isHindi ? "active" : ""}`}>
@@ -300,7 +412,8 @@ function Signup() {
             <img src="/logo3.png" alt="Partner Logo" className="portal-logo-right" />
           </div>
         </header>
-        <p className="signup-subtitle">Complete the required details to create your login credentials.</p>
+        <p className="signup-subtitle">{copy.subtitle}</p>
+        {infoMessage ? <p className="form-success">{infoMessage}</p> : null}
         <div className="signup-divider" />
 
         <form className="signup-form" onSubmit={handleSubmit}>
@@ -308,20 +421,20 @@ function Signup() {
           {success ? <p className="form-success">{success}</p> : null}
 
           <section className="form-section">
-            <h2>Section 1 - Basic Account Information (Required)</h2>
+            <h2>{copy.section1}</h2>
             <div className="form-grid">
               <label className="full-row">
-                Full Name (Founder / Authorized Person)
+                {copy.fullName}
                 <input type="text" name="fullName" ref={fullNameRef} className={errorField === "fullName" ? "input-error" : ""} required />
               </label>
 
               <label>
-                Official Email Address
+                {copy.officialEmail}
                 <input type="email" name="email" ref={emailRef} className={errorField === "email" ? "input-error" : ""} required />
               </label>
 
               <label>
-                Email OTP
+                {copy.emailOtp}
                 <div className="otp-row">
                   <input
                     type="text"
@@ -332,12 +445,12 @@ function Signup() {
                     className={errorField === "emailOtp" ? "input-error" : ""}
                     required
                   />
-                  <button type="button" className="otp-btn">Send OTP</button>
+                  <button type="button" className="otp-btn" onClick={() => sendOtp("email")}>{copy.sendOtp}</button>
                 </div>
               </label>
 
               <label>
-                Mobile Number
+                {copy.mobileNumber}
                 <input
                   type="tel"
                   name="mobile"
@@ -352,7 +465,7 @@ function Signup() {
               </label>
 
               <label>
-                Mobile OTP
+                {copy.mobileOtp}
                 <div className="otp-row">
                   <input
                     type="text"
@@ -363,12 +476,12 @@ function Signup() {
                     className={errorField === "mobileOtp" ? "input-error" : ""}
                     required
                   />
-                  <button type="button" className="otp-btn">Send OTP</button>
+                  <button type="button" className="otp-btn" onClick={() => sendOtp("mobile")}>{copy.sendOtp}</button>
                 </div>
               </label>
 
               <label>
-                Password
+                {copy.password}
                 <input
                   type="password"
                   name="password"
@@ -382,9 +495,9 @@ function Signup() {
 
               <label>
                 {confirmTouched && confirmPassword && password !== confirmPassword ? (
-                  <p className="inline-error">Password and Confirm Password must match.</p>
+                  <p className="inline-error">{copy.passwordMismatch}</p>
                 ) : null}
-                Confirm Password
+                {copy.confirmPassword}
                 <input
                   type="password"
                   name="confirmPassword"
@@ -406,23 +519,23 @@ function Signup() {
                 <span className="rule-mark" aria-hidden="true">
                   {passwordRuleStatus.minLength && passwordRuleStatus.uppercase && passwordRuleStatus.lowercase && passwordRuleStatus.number && passwordRuleStatus.special ? "\u2713" : "\u2717"}
                 </span>
-                <span>Minimum 8 characters, including 1 uppercase, 1 lowercase, 1 number, and 1 special character.</span>
+                <span>{copy.section1Hint1}</span>
               </p>
               <p className={passwordRuleStatus.noIncreasingLetters && passwordRuleStatus.noIncreasingNumbers && passwordRuleStatus.noTripleSame ? "rule-done" : ""}>
                 <span className="rule-mark" aria-hidden="true">
                   {passwordRuleStatus.noIncreasingLetters && passwordRuleStatus.noIncreasingNumbers && passwordRuleStatus.noTripleSame ? "\u2713" : "\u2717"}
                 </span>
-                <span>No 3 consecutive letters (abc), numbers (123), or identical characters (aaa).</span>
+                <span>{copy.section1Hint2}</span>
               </p>
             </div>
           </section>
 
           <section className="form-section">
-            <h2>Section 2 - Startup Identity</h2>
+            <h2>{copy.section2}</h2>
 
             <div className="form-grid">
               <label className="full-row">
-                Startup Name
+                {copy.startupName}
                 <input
                   type="text"
                   name="startupName"
@@ -440,7 +553,7 @@ function Signup() {
                 className={`ayush-sector-field ${errorField === "ayushSector" ? "input-error" : ""}`}
                 ref={ayushSectorRef}
               >
-                <span className="ayush-sector-label">AYUSH Sector</span>
+                <span className="ayush-sector-label">{copy.ayushSector}</span>
                 <div className="ayush-dropdown" ref={ayushDropdownRef}>
                   <button
                     type="button"
@@ -450,7 +563,7 @@ function Signup() {
                   >
                     <span>
                       {ayushSector.length === 0
-                        ? "Select sector(s)"
+                        ? copy.selectSector
                         : ayushSector.join(", ")}
                     </span>
                     <span className="ayush-dropdown-caret">▾</span>
@@ -486,7 +599,7 @@ function Signup() {
               </div>
 
               <label>
-                State / UT
+                {copy.stateUt}
                 <select
                   name="state"
                   className={`state-ut-input-lg ${errorField === "stateUt" ? "input-error" : ""}`}
@@ -496,16 +609,16 @@ function Signup() {
                   required
                 >
                   <option value="" disabled>
-                    Select State / UT
+                    {copy.selectStateUt}
                   </option>
-                  <optgroup label="States">
+                  <optgroup label={copy.statesLabel}>
                     {INDIAN_STATES.map((location) => (
                       <option key={location} value={location}>
                         {location}
                       </option>
                     ))}
                   </optgroup>
-                  <optgroup label="Union Territories">
+                  <optgroup label={copy.utsLabel}>
                     {INDIAN_UTS.map((location) => (
                       <option key={location} value={location}>
                         {location}
@@ -521,27 +634,27 @@ function Signup() {
                 <span className="rule-mark" aria-hidden="true">
                   {startupNameRuleStatus.minLength && startupNameRuleStatus.maxLength && startupNameRuleStatus.allowedChars ? "\u2713" : "\u2717"}
                 </span>
-                <span>3–100 characters, using only letters, numbers, spaces, ., &, -.</span>
+                <span>{copy.startupHint1}</span>
               </p>
               <p className={startupNameRuleStatus.notOnlyNumbers && startupNameRuleStatus.validStart && startupNameRuleStatus.noThreeSpecials ? "rule-done" : ""}>
                 <span className="rule-mark" aria-hidden="true">
                   {startupNameRuleStatus.notOnlyNumbers && startupNameRuleStatus.validStart && startupNameRuleStatus.noThreeSpecials ? "\u2713" : "\u2717"}
                 </span>
-                <span>Must not be only numbers, start with a special character, or contain 3 consecutive special characters.</span>
+                <span>{copy.startupHint2}</span>
               </p>
               <p className={startupNameRuleStatus.trimmed ? "rule-done" : ""}>
                 <span className="rule-mark" aria-hidden="true">
                   {startupNameRuleStatus.trimmed ? "\u2713" : "\u2717"}
                 </span>
-                <span>Leading/trailing spaces will be trimmed.</span>
+                <span>{copy.startupHint3}</span>
               </p>
             </div>
 
-            <p className="section-note">Do not upload documents here. Document collection is part of the registration stage.</p>
+            <p className="section-note">{copy.documentNote}</p>
           </section>
 
           <section className="form-section">
-            <h2>Section 3 - Declaration</h2>
+            <h2>{copy.section3}</h2>
             <label className="declaration-row">
               <input
                 type="checkbox"
@@ -552,18 +665,15 @@ function Signup() {
                 required
               />
               <span>
-                I confirm that the information provided is accurate and authentic. I agree to share the provided
-                data with the Government of India and relevant authorities for registration and verification purposes.
-                I have read and accept the Terms &amp; Conditions and Privacy Policy.
-              </span>
+                {copy.declaration}              </span>
             </label>
           </section>
 
           <div className="action-row">
-            <button type="submit" className="primary-btn">
-              Create Account
+            <button type="submit" className="primary-btn" disabled={isSubmitting}>
+              {isSubmitting ? copy.creating : copy.createAccount}
             </button>
-            <button type="button" className="secondary-btn" onClick={() => navigate("/login")}>Already Registered? Login</button>
+            <button type="button" className="secondary-btn" onClick={() => navigate("/login")}>{copy.alreadyRegistered}</button>
           </div>
         </form>
       </div>

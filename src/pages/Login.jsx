@@ -1,11 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { loginUser } from "../lib/api";
+import useLanguage from "../hooks/useLanguage";
 import "./Login.css";
+
+const createCaptcha = () => {
+  const a = Math.floor(Math.random() * 8) + 2;
+  const b = Math.floor(Math.random() * 8) + 2;
+  return { a, b, result: a + b };
+};
 
 function Login() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { isHindi, toggleLanguage } = useLanguage();
   const navigateWithTransition = (path) => {
     if (document.startViewTransition) {
       document.startViewTransition(() => navigate(path));
@@ -13,41 +22,52 @@ function Login() {
     }
     navigate(path);
   };
-  const [isHindi, setIsHindi] = useState(() => {
-    try {
-      return (localStorage.getItem("lang") || i18n.resolvedLanguage) === "hi";
-    } catch {
-      return i18n.resolvedLanguage === "hi";
-    }
-  });
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [captchaAnswer, setCaptchaAnswer] = useState("");
   const [error, setError] = useState("");
-  useEffect(() => {
-    const lang = isHindi ? "hi" : "en";
-    i18n.changeLanguage(lang);
-    try {
-      localStorage.setItem("lang", lang);
-    } catch {
-      // Ignore storage failures to prevent UI crash.
-    }
-  }, [i18n, isHindi]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captcha, setCaptcha] = useState(() => createCaptcha());
+  const refreshCaptcha = () => {
+    setCaptcha(createCaptcha());
+    setCaptchaAnswer("");
+  };
 
-  const captcha = useMemo(() => ({ a: 7, b: 5, result: 12 }), []);
-
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
 
     if (Number(captchaAnswer) !== captcha.result) {
       setError(t("loginCaptchaError"));
+      refreshCaptcha();
       return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await loginUser({
+        identifier: identifier.trim(),
+        password,
+      });
+
+      try {
+        localStorage.setItem("authToken", response.token);
+        localStorage.setItem("authUser", JSON.stringify(response.user));
+      } catch {
+        // Ignore storage failures so login still succeeds.
+      }
+
+      navigate("/dashboard");
+    } catch (apiError) {
+      setError(apiError.message || "Unable to sign in.");
+      refreshCaptcha();
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const canSubmit = identifier.trim() && password && captchaAnswer.trim();
+  const canSubmit = identifier.trim() && password && captchaAnswer.trim() && !isSubmitting;
 
   return (
     <div className="login-page">
@@ -72,7 +92,7 @@ function Login() {
           <div className="portal-controls">
             <button
               className="portal-lang-switch-btn"
-              onClick={() => setIsHindi(!isHindi)}
+              onClick={toggleLanguage}
               aria-label="Language toggle"
             >
               <span className={`portal-lang-pill ${isHindi ? "active" : ""}`}>
@@ -128,11 +148,14 @@ function Login() {
                 onChange={(event) => setCaptchaAnswer(event.target.value)}
                 required
               />
+              <button type="button" className="toggle-btn" onClick={refreshCaptcha}>
+                Refresh
+              </button>
             </div>
           </label>
 
           <button type="submit" className="login-btn" disabled={!canSubmit}>
-            {t("login")}
+            {isSubmitting ? "Signing in..." : t("login")}
           </button>
 
           <div className="support-links">

@@ -1,11 +1,13 @@
 ﻿import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import useLanguage from "../hooks/useLanguage";
 import "./Home.css";
 
 function Home() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { isHindi, toggleLanguage } = useLanguage();
 
   const goToSignup = () => {
     if (document.startViewTransition) {
@@ -22,24 +24,6 @@ function Home() {
     }
     navigate("/login");
   };
-
-  const [isHindi, setIsHindi] = useState(() => {
-    try {
-      return localStorage.getItem("lang") === "hi";
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    const lang = isHindi ? "hi" : "en";
-    i18n.changeLanguage(lang);
-    try {
-      localStorage.setItem("lang", lang);
-    } catch {
-      // Ignore storage failures to prevent UI crash.
-    }
-  }, [isHindi, i18n]);
 
   return (
     <div className="home-container">
@@ -64,7 +48,7 @@ function Home() {
           <div className="header-controls">
             <button
               className="lang-switch-btn"
-              onClick={() => setIsHindi((prev) => !prev)}
+              onClick={toggleLanguage}
               aria-label="Language toggle"
             >
               <span className={`lang-pill ${isHindi ? "active" : ""}`}>
