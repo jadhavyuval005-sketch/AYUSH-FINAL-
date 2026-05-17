@@ -1,1 +1,1 @@
-Hi this is a Minor project
+Hi this is a Minor project on day sunday
