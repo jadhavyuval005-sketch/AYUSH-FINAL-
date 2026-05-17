@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+let cachedConnection = globalThis.__ayushMongoConnection;
+
 const connectDB = async () => {
   const uri = process.env.MONGODB_URI;
 
@@ -7,12 +9,27 @@ const connectDB = async () => {
     throw new Error("MONGODB_URI is not set.");
   }
 
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (cachedConnection) {
+    return cachedConnection;
+  }
+
   try {
-    await mongoose.connect(uri);
+    cachedConnection = mongoose.connect(uri);
+    globalThis.__ayushMongoConnection = cachedConnection;
+
+    await cachedConnection;
     console.log("MongoDB connected.");
+
+    return cachedConnection;
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
-    process.exit(1);
+    cachedConnection = null;
+    globalThis.__ayushMongoConnection = null;
+    throw error;
   }
 };
 
